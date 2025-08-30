@@ -15,6 +15,8 @@ export default function ChatPage() {
   const [matchDetails, setMatchDetails] = useState<any>(null);
   const [chatMode, setChatMode] = useState<'text' | 'video'>('text');
   const [isLoading, setIsLoading] = useState(false);
+  const [matchStatus, setMatchStatus] = useState<string>('');
+  const [queuePosition, setQueuePosition] = useState<number>(0);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -86,9 +88,12 @@ export default function ChatPage() {
       if (result.matched) {
         setMatched(true);
         setMatchDetails(result);
+        setMatchStatus('Match found! Starting chat...');
         socketRef.current?.emit('join_chat', result.sessionId);
       } else {
-        // Wait for match
+        // Show queue status and wait for match
+        setMatchStatus(result.message || 'Looking for matches...');
+        setQueuePosition(result.queuePosition || 0);
         await waitForMatch();
       }
     } catch (error) {
@@ -201,7 +206,17 @@ export default function ChatPage() {
             {isLoading && (
               <div className="text-center mt-8">
                 <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-white/80">Searching for matches...</p>
+                <p className="text-white/80 text-lg mb-2">{matchStatus}</p>
+                {queuePosition > 0 && (
+                  <p className="text-white/60 text-sm">
+                    Position in queue: {queuePosition} • Estimated wait: {Math.ceil(queuePosition * 0.5)} minutes
+                  </p>
+                )}
+                <div className="mt-4 p-4 bg-white/10 rounded-lg">
+                  <p className="text-white/80 text-sm">
+                    💡 <strong>Tip:</strong> Open this page in another browser or incognito window to test matching!
+                  </p>
+                </div>
               </div>
             )}
           </div>
