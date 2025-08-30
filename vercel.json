@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "name": "loveli",
   "builds": [
     {
       "src": "package.json",
@@ -10,11 +9,7 @@
   "env": {
     "NODE_ENV": "production"
   },
-  "functions": {
-    "src/pages/api/**/*.ts": {
-      "maxDuration": 30
-    }
-  },
+
   "headers": [
     {
       "source": "/api/(.*)",
@@ -30,10 +25,5 @@
       "source": "/(.*)",
       "destination": "/"
     }
-  ],
-  "build": {
-    "env": {
-      "NODE_ENV": "production"
-    }
-  }
+  ]
 }

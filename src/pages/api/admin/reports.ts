@@ -1,32 +1,68 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getDatabase } from '@/lib/database';
+
+// In-memory storage for abuse reports
+const abuseReports: Array<{
+  id: string;
+  reporterId: string;
+  reportedId: string;
+  reason: string;
+  evidence: string;
+  createdAt: string;
+  resolved: boolean;
+}> = [];
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method === 'GET') {
+    // Get all reports
+    return res.json({
+      reports: abuseReports,
+      stats: {
+        total: abuseReports.length,
+        pending: abuseReports.filter(r => !r.resolved).length,
+        resolved: abuseReports.filter(r => r.resolved).length
+      }
+    });
   }
 
-  try {
-    const db = await getDatabase();
+  if (req.method === 'POST') {
+    // Create new report
+    const { reporterId, reportedId, reason, evidence } = req.body;
     
-    // Get all abuse reports
-    const reports = await db`
-      SELECT 
-        ar.*,
-        bu1.uuid as reporter_uuid,
-        bu2.uuid as reported_uuid
-      FROM abuse_reports ar
-      LEFT JOIN blocked_users bu1 ON ar.reporter_uuid = bu1.uuid
-      LEFT JOIN blocked_users bu2 ON ar.reported_uuid = bu2.uuid
-      ORDER BY ar.created_at DESC
-    `;
+    if (!reporterId || !reportedId || !reason) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
 
-    return res.json({ reports });
-  } catch (error) {
-    console.error('Error fetching reports:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    const newReport = {
+      id: Date.now().toString(),
+      reporterId,
+      reportedId,
+      reason,
+      evidence: evidence || '',
+      createdAt: new Date().toISOString(),
+      resolved: false
+    };
+
+    abuseReports.push(newReport);
+    
+    return res.status(201).json(newReport);
   }
+
+  if (req.method === 'PUT') {
+    // Resolve a report
+    const { reportId } = req.body;
+    
+    const report = abuseReports.find(r => r.id === reportId);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    report.resolved = true;
+    
+    return res.json(report);
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }

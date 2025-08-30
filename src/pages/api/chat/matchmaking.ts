@@ -1,7 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getRedisClient } from '@/lib/redis';
 import { UserSession, MatchmakingRequest } from '@/types';
-import { calculateInterestScore, findBestMatch } from '@/lib/utils';
+
+// In-memory storage for sessions and matchmaking
+const sessions = new Map<string, UserSession>();
+const matchmakingQueue: string[] = [];
+const chatSessions = new Map<string, any>();
 
 export default async function handler(
   req: NextApiRequest,
@@ -18,9 +21,7 @@ export default async function handler(
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    const redis = await getRedisClient();
-    
-    // Store user session
+    // Store user session in memory
     const userSession: UserSession = {
       id: userId,
       uuid: sessionId,
@@ -30,41 +31,32 @@ export default async function handler(
       matchedWith: null
     };
     
-    await redis.set(`session:${sessionId}`, JSON.stringify(userSession));
-    await redis.set(`interests:${sessionId}`, JSON.stringify(interests));
+    sessions.set(sessionId, userSession);
     
     // Find match with similar interests
-    const potentialMatches = await findMatches(redis, interests, sessionId);
+    const potentialMatches = findMatches(interests, sessionId);
     
     if (potentialMatches.length > 0) {
       // Match with the most compatible user
-      const bestMatch = findBestMatch(interests, potentialMatches);
+      const bestMatch = potentialMatches[0];
       
-      if (bestMatch) {
-        await createChatSession(redis, sessionId, bestMatch.id, interests);
-        
-        return res.json({ 
-          matched: true, 
-          matchId: bestMatch.id,
-          score: bestMatch.score,
-          sessionId: `${sessionId}-${bestMatch.id}`
-        });
-      }
+      createChatSession(sessionId, bestMatch.id, interests);
+      
+      return res.json({ 
+        matched: true, 
+        matchId: bestMatch.id,
+        score: bestMatch.score,
+        sessionId: `${sessionId}-${bestMatch.id}`
+      });
     }
     
     // No match found, add to waiting queue
-    await redis.lPush('matchmaking:queue', sessionId);
-    await redis.set(`waiting:${sessionId}`, JSON.stringify({
-      timestamp: Date.now(),
-      interests
-    }));
-    
-    const queuePosition = await getQueuePosition(redis, sessionId);
+    matchmakingQueue.push(sessionId);
     
     return res.json({ 
       matched: false, 
-      queuePosition,
-      estimatedWait: queuePosition * 30 // Rough estimate: 30 seconds per person in queue
+      queuePosition: matchmakingQueue.length,
+      estimatedWait: matchmakingQueue.length * 30 // Rough estimate: 30 seconds per person in queue
     });
     
   } catch (error) {
@@ -73,20 +65,14 @@ export default async function handler(
   }
 }
 
-async function findMatches(
-  redis: any, 
+function findMatches(
   interests: string[], 
   excludeSession: string
-): Promise<Array<{ id: string; interests: string[] }>> {
-  const allSessions = await redis.keys('session:*');
+): Array<{ id: string; interests: string[]; score: number }> {
   const matches: Array<{ id: string; interests: string[]; score: number }> = [];
   
-  for (const key of allSessions) {
-    const sessionData = await redis.get(key);
-    if (!sessionData) continue;
-    
-    const session: UserSession = JSON.parse(sessionData);
-    if (session.uuid === excludeSession || session.matchedWith) continue;
+  for (const [sessionId, session] of sessions) {
+    if (sessionId === excludeSession || session.matchedWith) continue;
     
     const score = calculateInterestScore(interests, session.interests);
     if (score > 0.3) { // Minimum similarity threshold
@@ -98,49 +84,53 @@ async function findMatches(
     }
   }
   
-  return matches
-    .sort((a, b) => b.score - a.score)
-    .map(m => ({ id: m.id, interests: m.interests }));
+  return matches.sort((a, b) => b.score - a.score);
 }
 
-async function getQueuePosition(redis: any, sessionId: string): Promise<number> {
-  const queue = await redis.lRange('matchmaking:queue', 0, -1);
-  return queue.indexOf(sessionId);
+function calculateInterestScore(interests1: string[], interests2: string[]): number {
+  const set1 = new Set(interests1.map(i => i.toLowerCase().trim()));
+  const set2 = new Set(interests2.map(i => i.toLowerCase().trim()));
+  
+  const intersection = new Set(Array.from(set1).filter(x => set2.has(x)));
+  const union = new Set([...Array.from(set1), ...Array.from(set2)]);
+  
+  return union.size === 0 ? 0 : intersection.size / union.size;
 }
 
-async function createChatSession(
-  redis: any, 
+function createChatSession(
   session1: string, 
   session2: string, 
   interests: string[]
-): Promise<void> {
+): void {
   const chatSessionId = `${session1}-${session2}`;
   
   // Mark both users as matched
-  await Promise.all([
-    redis.set(`session:${session1}`, JSON.stringify({
-      ...JSON.parse(await redis.get(`session:${session1}`) || '{}'),
-      matchedWith: session2
-    })),
-    redis.set(`session:${session2}`, JSON.stringify({
-      ...JSON.parse(await redis.get(`session:${session2}`) || '{}'),
-      matchedWith: session1
-    }))
-  ]);
+  const session1Data = sessions.get(session1);
+  const session2Data = sessions.get(session2);
+  
+  if (session1Data) {
+    session1Data.matchedWith = session2;
+    sessions.set(session1, session1Data);
+  }
+  
+  if (session2Data) {
+    session2Data.matchedWith = session1;
+    sessions.set(session2, session2Data);
+  }
   
   // Remove from waiting queue
-  await redis.lRem('matchmaking:queue', 0, session1);
-  await redis.lRem('matchmaking:queue', 0, session2);
+  const index1 = matchmakingQueue.indexOf(session1);
+  if (index1 > -1) matchmakingQueue.splice(index1, 1);
+  
+  const index2 = matchmakingQueue.indexOf(session2);
+  if (index2 > -1) matchmakingQueue.splice(index2, 1);
   
   // Create chat session
-  await redis.set(`chat:${chatSessionId}`, JSON.stringify({
+  chatSessions.set(chatSessionId, {
     participants: [session1, session2],
     interests,
     startedAt: new Date().toISOString(),
     messages: [],
     status: 'active'
-  }));
-  
-  // Set expiration for chat session (24 hours)
-  await redis.expire(`chat:${chatSessionId}`, 86400);
+  });
 }
