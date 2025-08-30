@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply antialiased;
+  }
+  
+  * {
+    @apply border-gray-200;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-purple-500 text-white px-6 py-3 rounded-full font-medium hover:bg-purple-600 transition-all duration-200 transform hover:scale-105;
+  }
+  
+  .btn-secondary {
+    @apply bg-white text-purple-600 px-6 py-3 rounded-full font-medium hover:bg-purple-50 transition-all duration-200 border-2 border-white;
+  }
+  
+  .card {
+    @apply bg-white rounded-2xl shadow-lg overflow-hidden;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent;
+  }
+  
+  .bg-glass {
+    @apply bg-white/10 backdrop-blur-sm;
+  }
+  
+  .shadow-glow {
+    box-shadow: 0 0 20px rgba(147, 51, 234, 0.3);
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Loading spinner */
+.spinner {
+  @apply animate-spin rounded-full border-2 border-gray-300 border-t-purple-500;
+}
+
+/* Typing indicator */
+.typing-dots {
+  @apply flex space-x-1;
+}
+
+.typing-dots > div {
+  @apply w-2 h-2 bg-current rounded-full animate-bounce;
+}
+
+.typing-dots > div:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.typing-dots > div:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+/* Video chat specific styles */
+.video-container {
+  @apply relative bg-gray-900 rounded-lg overflow-hidden;
+}
+
+.video-overlay {
+  @apply absolute inset-0 bg-black/20 flex items-center justify-center;
+}
+
+.video-controls {
+  @apply absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-4;
+}
+
+/* Responsive design utilities */
+@media (max-width: 640px) {
+  .mobile-hidden {
+    @apply hidden;
+  }
+  
+  .mobile-full {
+    @apply w-full;
+  }
+}
+
+@media (min-width: 1024px) {
+  .desktop-grid-2 {
+    @apply grid-cols-2;
+  }
+  
+  .desktop-max-w-4xl {
+    @apply max-w-4xl;
+  }
+}
+
+/* Focus states for accessibility */
+.focus-visible:focus {
+  @apply outline-none ring-2 ring-purple-500 ring-offset-2;
+}
+
+/* Dark mode support (if needed in future) */
+@media (prefers-color-scheme: dark) {
+  .dark-mode {
+    @apply bg-gray-900 text-white;
+  }
+}
