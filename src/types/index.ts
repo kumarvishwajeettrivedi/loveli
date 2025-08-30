@@ -5,6 +5,7 @@ export interface UserSession {
   connectionId: string;
   createdAt: Date;
   matchedWith: string | null;
+  deploymentId?: string;
 }
 
 export interface ChatMessage {
